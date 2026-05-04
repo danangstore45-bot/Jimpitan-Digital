@@ -41,11 +41,34 @@ function simpanData() {
 const html5QrCode = new Html5Qrcode("reader");
 const config = { fps: 10, qrbox: { width: 250, height: 250 } };
 
-// Mulai Kamera
-html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
-    document.getElementById('wargaId').value = decodedText;
-    if (navigator.vibrate) navigator.vibrate(100);
-});
+function mulaiScanner() {
+    if (scannerBerjalan) return;
+    scannerBerjalan = true;
+    document.getElementById('scanStatus').textContent = 'Arahkan kamera ke barcode untuk scan sekali.';
+    document.getElementById('restartScanner').classList.add('hidden');
+
+    html5QrCode.start({ facingMode: "environment" }, config,
+        (decodedText) => {
+            if (!scannerBerjalan) return;
+            scannerBerjalan = false;
+            document.getElementById('wargaId').value = decodedText;
+            document.getElementById('scanStatus').textContent = 'Scan selesai. Tekan "Scan lagi" untuk pindai kode lain.';
+            document.getElementById('restartScanner').classList.remove('hidden');
+            if (navigator.vibrate) navigator.vibrate(100);
+            html5QrCode.stop().catch(err => console.warn('Gagal berhenti scanner:', err));
+        },
+        (errorMessage) => {
+            // Biarkan scanner berjalan; kesalahan kecil diabaikan.
+        }
+    ).catch(error => {
+        scannerBerjalan = false;
+        console.error('Gagal memulai scanner:', error);
+        document.getElementById('scanStatus').textContent = 'Tidak dapat memulai kamera. Periksa izin atau perangkat.';
+    });
+}
+
+// Mulai kamera saat halaman dibuka
+mulaiScanner();
 
 // Update Tampilan Tabel di HP
 function updateTable() {
