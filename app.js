@@ -17,7 +17,13 @@ function simpanData() {
         body: JSON.stringify(dataKirim)
     })
     .then(res => {
-        alert("Data terkirim ke Google Sheets!");
+        Swal.fire({
+  title: 'Berhasil!',
+  text: 'Data Sudah Tercatat "Terima Kasih".',
+  icon: 'success',
+  confirmButtonText: 'Oke Sip',
+  confirmButtonColor: '#4f46e5' // Warna ungu indigo sesuai tema Anda
+});
         
         // 2. Simpan juga ke memori lokal browser sebagai cadangan
         let listJimpitan = JSON.parse(localStorage.getItem('jimpitan') || "[]");
