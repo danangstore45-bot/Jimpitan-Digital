@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Jimpitan Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Library untuk QR Code -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6">
+        <h1 class="text-2xl font-bold text-center mb-6 text-indigo-600">Jimpitan Digital</h1>
+        
+        <!-- Scanner Section -->
+        <div id="reader" class="mb-4"></div>
+        
+        <!-- Form Input -->
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium">Nama Warga / ID Rumah</label>
+                <input type="text" id="wargaId" class="w-full border rounded p-2" placeholder="Scan QR atau ketik manual">
+            </div>
+            <div>
+                <label class="block text-sm font-medium">Jumlah (Rp)</label>
+                <input type="number" id="jumlah" value="1000" class="w-full border rounded p-2">
+            </div>
+            <button onclick="simpanData()" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700">
+                Simpan Data
+            </button>
+        </div>
+
+        <hr class="my-6">
+
+        <!-- History Table -->
+        <h2 class="font-bold mb-2 text-gray-700">Riwayat Hari Ini</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="p-2">Warga</th>
+                        <th class="p-2 text-right">Jumlah</th>
+                    </tr>
+                </thead>
+                <tbody id="historyBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
