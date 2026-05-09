@@ -1,0 +1,15 @@
+{
+  "name": "Jimpitan Digital",
+  "short_name": "Jimpitan",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#4f46e5",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1161/1161388.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

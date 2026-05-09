@@ -1,11 +1,22 @@
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwBa_eiDGLSMCqWop5aTHPWWyQpDYVaxtSkxtbqus5iOxyqlKSVOHTdrSZmOUif6YnA/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwZJzFXiu4QEwq3EnTs-XE54RrBoVC_KKFNAj-dBqRk12hl69jnbSi495kKiyzkew18/exec";
 let pengambilanAktif = false;
 let scannerBerjalan = false;
 let jumlahSesi = 0;
 let totalSesi = 0;
+let petugasAktif = "";
+let isSaving = false;
+
+function setPetugas(name) {
+    petugasAktif = name;
+    window.namaPetugas = name;
+    const petugasNameEl = document.getElementById('petugasName');
+    if (petugasNameEl) {
+        petugasNameEl.textContent = name || 'Belum dipilih';
+    }
+}
 
 function updateInputsState() {
-    const disabled = !pengambilanAktif;
+    const disabled = !pengambilanAktif || isSaving;
     document.getElementById('wargaId').disabled = disabled;
     document.getElementById('jumlah').disabled = disabled;
     document.getElementById('btnSimpan').disabled = disabled;
@@ -13,15 +24,42 @@ function updateInputsState() {
 
 function simpanData() {
     if (!pengambilanAktif) return alert("Mulai pengambilan dulu sebelum simpan data.");
-    const nama = document.getElementById('wargaId').value;
+    if (!petugasAktif) return alert("Pilih petugas terlebih dahulu.");
+    const nama = document.getElementById('wargaId').value.trim();
     const nominal = document.getElementById('jumlah').value;
+    const tanggal = new Date().toLocaleDateString('id-ID');
 
     if (!nama) return alert("Pilih warga dulu!");
 
+    let listJimpitan = JSON.parse(localStorage.getItem('jimpitan') || "[]");
+    const sudahTerinput = listJimpitan.some(item => item.nama.trim().toLowerCase() === nama.toLowerCase() && item.tanggal === tanggal);
+    if (sudahTerinput) {
+        return Swal.fire({
+            title: 'Duplikat Terdeteksi',
+            text: 'Rumah/QR ini sudah dicatat hari ini. Silakan cek kembali daftar riwayat.',
+            icon: 'warning',
+            confirmButtonText: 'Oke',
+            confirmButtonColor: '#4f46e5'
+        });
+    }
+
+    const namaWarga = nama;
     const dataKirim = {
         nama: nama,
-        nominal: nominal
+        nominal: nominal,
+        petugas: petugasAktif,
+        waktu: new Date().toLocaleTimeString('id-ID'),
+        tanggal: tanggal
     };
+
+    const darkMode = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const popupBackground = darkMode ? '#111827' : '#f8fafc';
+    const textColor = darkMode ? '#f3f4f6' : '#111827';
+    const cardBackground = darkMode ? 'rgba(55, 65, 81, 0.9)' : 'rgba(241, 245, 249, 0.9)';
+    const borderColor = darkMode ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.25)';
+
+    isSaving = true;
+    updateInputsState();
 
     // 1. Simpan ke Google Sheets via API
     fetch(SCRIPT_URL, {
@@ -30,16 +68,30 @@ function simpanData() {
     })
     .then(res => {
         Swal.fire({
-  title: 'Berhasil!',
-  text: 'Data Sudah Tercatat "Terima Kasih".',
-  icon: 'success',
-  confirmButtonText: 'Oke Sip',
-  confirmButtonColor: '#4f46e5' // Warna ungu indigo sesuai tema Anda
-});
+          title: `<span style="color: #4f46e5; font-family: Poppins, sans-serif;">Jimpitan Digital</span>`,
+          html: `
+            <div style="text-align: center; color: ${textColor};">
+              <p style="font-size: 1.1em; margin-bottom: 20px;">Data jimpitan berhasil dicatat.</p>
+              <div style="background: ${cardBackground}; padding: 1rem; border-radius: 1rem; border: 1px solid ${borderColor}; backdrop-filter: blur(10px);" class="text-sm">
+                Petugas: <span style="font-weight: 700; color: #a5b4fc;">${window.namaPetugas}</span><br>
+                Warga: <span style="font-weight: 700;">${namaWarga}</span>
+              </div>
+              <p style="margin-top: 15px; font-weight: bold; color: #fbbf24;">Terima kasih!</p>
+            </div>
+          `,
+          iconHtml: '<img src="https://cdn-icons-png.flaticon.com/512/1161/1161388.png" style="width: 80px; height: 80px;">',
+          confirmButtonText: 'Lanjut Mengambil',
+          confirmButtonColor: '#4f46e5',
+          allowOutsideClick: false,
+          background: popupBackground,
+          customClass: {
+            popup: 'rounded-2xl shadow-2xl border-2 border-indigo-800/30',
+            confirmButton: 'rounded-xl text-lg px-8 py-3',
+          }
+        });
         
         // 2. Simpan juga ke memori lokal browser sebagai cadangan
-        let listJimpitan = JSON.parse(localStorage.getItem('jimpitan') || "[]");
-        listJimpitan.unshift({ ...dataKirim, waktu: new Date().toLocaleTimeString() });
+        listJimpitan.unshift(dataKirim);
         localStorage.setItem('jimpitan', JSON.stringify(listJimpitan));
 
         if (pengambilanAktif) {
@@ -54,6 +106,10 @@ function simpanData() {
     .catch(error => {
         console.error('Error:', error);
         alert("Gagal mengirim data. Periksa koneksi internet.");
+    })
+    .finally(() => {
+        isSaving = false;
+        updateInputsState();
     });
 }
 const html5QrCode = new Html5Qrcode("reader");
@@ -84,6 +140,9 @@ function updateSessionSummary() {
 
 function mulaiPengambilan() {
     if (pengambilanAktif) return;
+    if (!petugasAktif) {
+        return showWelcomeDialog();
+    }
     pengambilanAktif = true;
     jumlahSesi = 0;
     totalSesi = 0;
@@ -140,13 +199,84 @@ let showAllHistory = false;
 
 function showWelcomeDialog() {
     Swal.fire({
-        title: 'Selamat Datang',
-        html: '<h2 class="text-2xl font-bold text-indigo-600 mb-2">Jimpitan Digital</h2><p class="text-gray-600">Aplikasi pengumpulan jimpitan yang mudah dan cepat</p>',
-        icon: 'info',
-        confirmButtonText: 'Mulai',
+        title: 'Selamat Datang!',
+        html: `
+            <div class="text-center">
+                <div class="text-6xl mb-4">💰</div>
+                <h2 class="text-xl font-bold text-indigo-600 mb-2">Jimpitan Digital</h2>
+                <p class="text-gray-600 mb-4 text-sm">Silakan pilih nama petugas untuk memulai sesi pengambilan jimpitan hari ini.</p>
+                
+                <div class="relative mt-4">
+                    <input type="text" id="searchPetugas" placeholder="Cari nama petugas..." class="block w-full px-4 py-2 mb-2 text-gray-700 bg-gray-50 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                    <select id="pilihPetugas" class="block w-full px-4 py-3 text-gray-700 bg-gray-50 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                        <option value="" disabled selected>-- Pilih Nama Petugas --</option>
+                        <option value="Luthi Tyan">Luthi Tyan</option>
+                        <option value="Aa Badrul Munir">Aa Badrul Munir</option>
+                        <option value="Muhammad Maftuh Zen">Muhammad Maftuh Zen</option>
+                        <option value="Dede yusna">Dede yusna</option>
+                        <option value="M Aziz setiawan">M Aziz setiawan</option>
+                        <option value="Asep nurdiansyah">Asep nurdiansyah</option>
+                        <option value="Agun Gunawan">Agun Gunawan</option>
+                        <option value="Alfian Putra H">Alfian Putra H</option>
+                        <option value="Ronal Dwi Nugroho">Ronal Dwi Nugroho</option>
+                        <option value="Hoeririn">Hoeririn</option>
+                        <option value="M alfi fahrul N">M alfi fahrul N</option>
+                        <option value="M irfan">M irfan</option>
+                        <option value="Adik Gunawan">Adik Gunawan</option>
+                        <option value="Danang">Danang</option>
+                        <option value="Riki">Riki</option>
+                        <option value="Jalal">Jalal</option>
+                    </select>
+                </div>
+            </div>
+        `,
+        confirmButtonText: 'Mulai Bertugas',
         confirmButtonColor: '#4f46e5',
         allowOutsideClick: false,
-        allowEscapeKey: false
+        allowEscapeKey: false,
+        showClass: {
+            popup: 'animate__animated animate__fadeInDown'
+        },
+        hideClass: {
+            popup: 'animate__animated animate__fadeOutUp'
+        },
+        didOpen: () => {
+            const searchInput = document.getElementById('searchPetugas');
+            const select = document.getElementById('pilihPetugas');
+            const options = select.querySelectorAll('option');
+            
+            searchInput.addEventListener('input', function() {
+                const filter = this.value.toLowerCase();
+                options.forEach(option => {
+                    if (option.value === '') return; // Skip placeholder
+                    const text = option.textContent.toLowerCase();
+                    option.style.display = text.includes(filter) ? '' : 'none';
+                });
+            });
+        },
+        preConfirm: () => {
+            const nama = document.getElementById('pilihPetugas').value;
+            if (!nama) {
+                Swal.showValidationMessage('Anda harus memilih nama petugas!');
+            }
+            return nama;
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Simpan nama ke variabel global agar bisa dikirim ke Sheets
+            setPetugas(result.value); // Update petugasAktif dan tampilan
+            
+            // Notifikasi sukses kecil (Toast)
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'Halo ' + result.value + ', selamat bertugas!',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true
+            });
+        }
     });
 }
 
@@ -165,7 +295,8 @@ function updateTable() {
         const dataToShow = showAllHistory ? listJimpitan : listJimpitan.slice(0, 3);
         tbody.innerHTML = dataToShow.map(item => `
             <tr class="border-b">
-                <td class="p-2">${item.nama} <br><span class="text-xs text-gray-400">${item.waktu}</span></td>
+                <td class="p-2">${item.nama} <br><span class="text-xs text-gray-400">${item.waktu}${item.tanggal ? ' • ' + item.tanggal : ''}</span></td>
+                <td class="p-2">${item.petugas || '—'}</td>
                 <td class="p-2 text-right text-green-600 font-bold">Rp ${parseInt(item.nominal).toLocaleString()}</td>
             </tr>
         `).join('');
@@ -181,5 +312,5 @@ function updateTable() {
 }
 updateTable();
 
-// Tampilkan welcome dialog saat halaman pertama kali dibuka
+// Tampilkan popup Jimpitan Jigital saat halaman pertama kali dibuka
 showWelcomeDialog();
