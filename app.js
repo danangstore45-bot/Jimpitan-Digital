@@ -7,8 +7,102 @@ let petugasAktif = "";
 let blokAktif = "";
 let isSaving = false;
 const AUTHORIZED_SALDO_EDITORS = ['Luthi Tyan'];
+const VIBRATION_KEY = 'jimpitan_vibration_enabled';
+const THEME_KEY = 'jimpitan_theme';
 
-async function fetchJson(url, options = {}) { 
+function isVibrationEnabled() {
+    const saved = localStorage.getItem(VIBRATION_KEY);
+    if (saved === null) return true;
+    return saved === 'true';
+}
+
+function setVibrationEnabled(enabled) {
+    localStorage.setItem(VIBRATION_KEY, String(enabled));
+    const toggle = document.getElementById('geterToggle');
+    if (toggle) {
+        toggle.classList.toggle('bg-indigo-600', enabled);
+        toggle.classList.toggle('bg-slate-300', !enabled);
+        const thumb = toggle.querySelector('span');
+        if (thumb) {
+            thumb.classList.toggle('translate-x-6', enabled);
+            thumb.classList.toggle('translate-x-1', !enabled);
+        }
+    }
+}
+
+function getThemeMode() {
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    if (savedTheme === 'dark' || savedTheme === 'light') {
+        return savedTheme;
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyTheme() {
+    const mode = getThemeMode();
+    const isDark = mode === 'dark';
+    document.documentElement.classList.toggle('dark', isDark);
+
+    const toggle = document.getElementById('themeToggle');
+    if (toggle) {
+        toggle.classList.toggle('bg-indigo-600', isDark);
+        toggle.classList.toggle('bg-slate-300', !isDark);
+        const thumb = toggle.querySelector('span');
+        if (thumb) {
+            thumb.classList.toggle('translate-x-6', isDark);
+            thumb.classList.toggle('translate-x-1', !isDark);
+        }
+    }
+}
+
+function toggleThemeMode() {
+    const nextMode = getThemeMode() === 'dark' ? 'light' : 'dark';
+    localStorage.setItem(THEME_KEY, nextMode);
+    applyTheme();
+}
+
+function toggleVibrationSetting() {
+    const enabled = !isVibrationEnabled();
+    setVibrationEnabled(enabled);
+}
+
+function toggleSettingsPanel() {
+    showSettingsScreen();
+}
+
+function showSettingsScreen() {
+    animateScreen('settingsScreen', 'next');
+}
+
+function showAboutDialog() {
+    Swal.fire({
+        title: 'About',
+        html: '<p style="margin:0; line-height:1.6;">Aplikasi ini masih dalam uji coba.</p>',
+        icon: 'info',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#4f46e5'
+    });
+}
+
+function resetSettings() {
+    localStorage.removeItem(VIBRATION_KEY);
+    localStorage.removeItem(THEME_KEY);
+    setVibrationEnabled(true);
+    applyTheme();
+    toggleSettingsPanel();
+
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'Pengaturan direset',
+        showConfirmButton: false,
+        timer: 1800,
+        timerProgressBar: true
+    });
+}
+
+async function fetchJson(url, options = {}) {
     const response = await fetch(url, options);
     if (!response.ok) {
         throw new Error('Network error');
@@ -356,7 +450,7 @@ function mulaiScanner() {
             document.getElementById('wargaId').value = decodedText;
             document.getElementById('scanStatus').textContent = 'Scan selesai. Tekan "Scan lagi" untuk pindai kode lain.';
             document.getElementById('restartScanner').classList.remove('hidden');
-            if (navigator.vibrate) navigator.vibrate(100);
+            if (isVibrationEnabled() && navigator.vibrate) navigator.vibrate(100);
             html5QrCode.stop().catch(err => console.warn('Gagal berhenti scanner:', err));
         },
         (errorMessage) => {
@@ -369,6 +463,11 @@ function mulaiScanner() {
     });
 }
 
+function initSettingsUI() {
+    setVibrationEnabled(isVibrationEnabled());
+    applyTheme();
+}
+
 // Perbarui status awal tanpa otomatis mulai kamera
 updateSessionStatus();
 updateSessionSummary();
@@ -377,6 +476,7 @@ syncSaldoFromServer();
 syncRiwayatFromServer();
 syncWargaFromServer();
 syncBlokFromServer();
+initSettingsUI();
 
 let showAllHistory = false;
 
@@ -634,23 +734,83 @@ function renderBlokSummary() {
     `).join('');
 }
 
+function updateBottomNavState(activeId) {
+    const buttons = {
+        homeScreen: document.getElementById('navHomeButton'),
+        historyScreen: document.getElementById('navHistoryButton'),
+        settingsScreen: document.getElementById('navSettingButton')
+    };
+
+    Object.entries(buttons).forEach(([id, button]) => {
+        if (!button) return;
+        const isActive = id === activeId;
+        button.classList.toggle('bg-white/10', isActive);
+        button.classList.toggle('text-white', isActive);
+        button.classList.toggle('ring-1', isActive);
+        button.classList.toggle('ring-white/10', isActive);
+        button.classList.toggle('shadow-inner', isActive);
+        button.classList.toggle('text-indigo-200', !isActive);
+    });
+}
+
+function animateScreen(screenId, direction = 'next') {
+    const targets = {
+        homeScreen: document.getElementById('homeScreen'),
+        mainApp: document.getElementById('mainApp'),
+        historyScreen: document.getElementById('historyScreen'),
+        daftarWargaSection: document.getElementById('daftarWargaSection'),
+        settingsScreen: document.getElementById('settingsScreen')
+    };
+
+    const enterFrom = direction === 'next' ? 'translate-x-full' : '-translate-x-full';
+    const exitTo = direction === 'next' ? '-translate-x-full' : 'translate-x-full';
+
+    Object.entries(targets).forEach(([id, el]) => {
+        if (!el) return;
+
+        if (id === screenId) {
+            el.classList.remove('hidden');
+            el.classList.remove('translate-x-full', '-translate-x-full');
+            el.classList.add(enterFrom);
+            void el.offsetWidth;
+            el.classList.remove(enterFrom);
+            el.classList.add('translate-x-0');
+            requestAnimationFrame(() => {
+                el.classList.remove('translate-x-full', '-translate-x-full');
+            });
+        } else {
+            el.classList.add('hidden');
+            el.classList.remove('translate-x-0', 'translate-x-full', '-translate-x-full');
+            el.classList.add(exitTo);
+        }
+    });
+
+    if (screenId === 'homeScreen' || screenId === 'historyScreen' || screenId === 'settingsScreen') {
+        updateBottomNavState(screenId);
+    }
+}
+
 function showHomeScreen() {
-    document.getElementById('homeScreen').classList.remove('hidden');
-    document.getElementById('mainApp').classList.add('hidden');
-    document.getElementById('daftarWargaSection').classList.add('hidden');
+    animateScreen('homeScreen', 'prev');
 }
 
 function showMainApp() {
-    document.getElementById('homeScreen').classList.add('hidden');
-    document.getElementById('mainApp').classList.remove('hidden');
-    document.getElementById('daftarWargaSection').classList.add('hidden');
+    animateScreen('mainApp', 'next');
+    updateBottomNavState('homeScreen');
+}
+
+function showHistoryScreen() {
+    animateScreen('historyScreen', 'next');
 }
 
 function showDaftarWarga() {
-    document.getElementById('homeScreen').classList.add('hidden');
-    document.getElementById('mainApp').classList.add('hidden');
-    document.getElementById('daftarWargaSection').classList.remove('hidden');
+    animateScreen('daftarWargaSection', 'next');
     renderDaftarWarga();
+    updateBottomNavState('homeScreen');
+}
+
+function showSettingsScreen() {
+    animateScreen('settingsScreen', 'next');
 }
 
 updateTable();

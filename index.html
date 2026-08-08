@@ -15,16 +15,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aplikasi Jimpitan Digital</title>
     <script>
-        tailwind.config = {
+        window.tailwind = window.tailwind || {};
+        window.tailwind.config = {
             darkMode: 'class',
         };
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        const updateTheme = (e) => document.documentElement.classList.toggle('dark', e.matches);
+        const updateTheme = (e) => {
+            const savedTheme = localStorage.getItem('jimpitan_theme');
+            const nextTheme = savedTheme || (e.matches ? 'dark' : 'light');
+            document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+        };
         updateTheme(mediaQuery);
         if (mediaQuery.addEventListener) {
-            mediaQuery.addEventListener('change', updateTheme);
+            mediaQuery.addEventListener('change', (e) => {
+                if (!localStorage.getItem('jimpitan_theme')) {
+                    document.documentElement.classList.toggle('dark', e.matches);
+                }
+            });
         } else if (mediaQuery.addListener) {
-            mediaQuery.addListener(updateTheme);
+            mediaQuery.addListener((e) => {
+                if (!localStorage.getItem('jimpitan_theme')) {
+                    document.documentElement.classList.toggle('dark', e.matches);
+                }
+            });
         }
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -43,19 +56,18 @@
     </script>
 </head>
 <body class="bg-gray-100 p-4 dark:bg-slate-950 dark:text-slate-200 transition-colors duration-200">
-    <div class="max-w-md mx-auto bg-white rounded-[28px] shadow-xl overflow-hidden dark:bg-slate-900 dark:shadow-slate-800">
-        <div id="homeScreen" class="bg-gradient-to-br from-indigo-900 via-indigo-800 to-violet-700 text-white min-h-screen">
+    <div class="max-w-md mx-auto bg-white rounded-[28px] shadow-xl overflow-hidden relative dark:bg-slate-900 dark:shadow-slate-800">
+        <div class="relative min-h-screen overflow-hidden pb-20">
+            <div id="homeScreen" class="screen-panel absolute inset-0 bg-gradient-to-br from-indigo-900 via-indigo-800 to-violet-700 text-white min-h-screen transition-transform duration-300 ease-in-out transform translate-x-0">
             <div class="px-5 pt-5 pb-4">
                 <div class="flex items-center justify-between text-xs text-indigo-100">
-                    <span>09:41</span>
+                    <span></span>
                     <div class="flex items-center gap-2">
-                        <span>◔</span>
-                        <span>📶</span>
-                        <span>🔋</span>
+                        <span class="opacity-0">.</span>
                     </div>
                 </div>
 
-                <div class="mt-4 flex items-center justify-between">
+                <div class="mt-2 flex items-center justify-between">
                     <div>
                         <p class="text-xs uppercase tracking-[0.2em] text-indigo-200">Jimpitan Digital RT 01</p>
                         <h1 class="mt-2 text-2xl font-bold">Selamat Datang!</h1>
@@ -161,23 +173,55 @@
                 </div>
             </div>
 
-            <div class="border-t border-white/10 bg-indigo-950/30 px-5 py-3 flex items-center justify-between text-xs text-indigo-100">
-                <button class="flex flex-col items-center gap-1 text-indigo-50 font-medium">
-                    <span>⌂</span>
-                    <span>Beranda</span>
-                </button>
-                <button class="flex flex-col items-center gap-1 text-indigo-200">
-                    <span>◔</span>
-                    <span>Riwayat</span>
-                </button>
-                <button class="flex flex-col items-center gap-1 text-indigo-200">
-                    <span>⚙</span>
-                    <span>Setting</span>
-                </button>
+        </div>
+
+            <div id="settingsScreen" class="screen-panel hidden absolute inset-0 min-h-screen bg-slate-100 p-4 transition-transform duration-300 ease-in-out transform translate-x-full dark:bg-slate-950">
+            <div class="max-w-md mx-auto">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-sm dark:bg-indigo-900/40 dark:text-indigo-200">⚙️</div>
+                        <div>
+                            <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Pengaturan</p>
+                            <h1 class="text-2xl font-bold text-indigo-600 dark:text-indigo-300">Setting</h1>
+                        </div>
+                    </div>
+                    <button onclick="showHomeScreen()" class="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-300">← Beranda</button>
+                </div>
+
+                <div class="space-y-4 rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">Getar</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-300">Bergetar saat scan berhasil</div>
+                        </div>
+                        <button id="geterToggle" onclick="toggleVibrationSetting()" class="relative inline-flex h-7 w-12 items-center rounded-full bg-slate-300 transition-colors duration-200 dark:bg-slate-700">
+                            <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 translate-x-1"></span>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">Mode Gelap</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-300">Ubah tampilan terang/gelap</div>
+                        </div>
+                        <button id="themeToggle" onclick="toggleThemeMode()" class="relative inline-flex h-7 w-12 items-center rounded-full bg-slate-300 transition-colors duration-200 dark:bg-slate-700">
+                            <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 translate-x-1"></span>
+                        </button>
+                    </div>
+
+                    <div class="pt-1">
+                        <button onclick="resetSettings()" class="w-full rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">Reset</button>
+                    </div>
+
+                    <div class="rounded-xl bg-slate-100 p-3 text-left dark:bg-slate-800">
+                        <div class="text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Tentang</div>
+                        <p class="mt-2 text-sm text-slate-700 dark:text-slate-200">Aplikasi ini masih dalam uji coba.</p>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div id="mainApp" class="hidden bg-slate-100 min-h-screen p-4 dark:bg-slate-950">
+            <div id="mainApp" class="screen-panel hidden absolute inset-0 bg-slate-100 min-h-screen p-4 transition-transform duration-300 ease-in-out transform translate-x-full dark:bg-slate-950">
             <div class="max-w-md mx-auto">
                 <div class="flex items-center justify-between mb-4">
                     <div>
@@ -276,34 +320,82 @@
             </div>
         </div>
 
-        <div id="daftarWargaSection" class="hidden p-4">
-            <div class="flex items-center justify-between mb-4">
-                <div>
-                    <h1 class="text-2xl font-bold text-indigo-600 dark:text-indigo-300">Daftar Warga</h1>
-                    <p class="text-sm text-gray-600 dark:text-slate-300">Lihat warga yang pernah tercatat jimpitan.</p>
+            <div id="historyScreen" class="screen-panel hidden absolute inset-0 bg-slate-100 min-h-screen p-4 transition-transform duration-300 ease-in-out transform translate-x-full dark:bg-slate-950">
+            <div class="max-w-md mx-auto">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Riwayat</p>
+                        <h1 class="text-2xl font-bold text-indigo-600 dark:text-indigo-300">Riwayat Jimpitan</h1>
+                    </div>
+                    <button onclick="showHomeScreen()" class="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-300">← Beranda</button>
                 </div>
-                <button onclick="showHomeScreen()" class="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-300">← Beranda</button>
-            </div>
 
-            <div class="mb-5">
-                <h2 class="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300 mb-3">Ringkasan per Blok</h2>
-                <div id="blokSummaryGrid" class="grid grid-cols-2 gap-3"></div>
-            </div>
+                <div class="rounded-2xl bg-white p-5 shadow-sm dark:bg-slate-900">
+                    <div class="mb-4 flex items-center justify-between">
+                        <h2 class="font-bold text-slate-700 dark:text-slate-200">Data terbaru</h2>
+                        <span class="text-xs text-slate-500 dark:text-slate-300">Kosong</span>
+                    </div>
 
-            <div class="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-lg" style="max-height: 400px; overflow-y: auto;">
-                <table class="w-full text-sm text-left">
-                    <thead class="bg-gray-50 dark:bg-slate-800 sticky top-0">
-                        <tr>
-                            <th class="p-2">Nama Warga</th>
-                            <th class="p-2 text-right">Total Transaksi</th>
-                            <th class="p-2 text-right">Total Rp</th>
-                        </tr>
-                    </thead>
-                    <tbody id="daftarWargaBody"></tbody>
-                </table>
+                    <div class="flex min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-center dark:border-slate-700 dark:bg-slate-800/60">
+                        <div>
+                            <div class="text-4xl mb-2">📋</div>
+                            <p class="font-semibold text-slate-600 dark:text-slate-200">Belum ada riwayat</p>
+                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-300">Riwayat akan muncul di sini setelah data tersimpan.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div id="daftarWargaEmpty" class="mt-4 text-center text-gray-500 dark:text-slate-400 hidden">
-                Belum ada data warga yang tercatat.
+        </div>
+
+            <div id="daftarWargaSection" class="screen-panel hidden absolute inset-0 bg-slate-100 min-h-screen p-4 transition-transform duration-300 ease-in-out transform translate-x-full dark:bg-slate-950">
+            <div class="max-w-md mx-auto">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-indigo-600 dark:text-indigo-300">Daftar Warga</h1>
+                        <p class="text-sm text-gray-600 dark:text-slate-300">Lihat warga yang pernah tercatat jimpitan.</p>
+                    </div>
+                    <button onclick="showHomeScreen()" class="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-300">← Beranda</button>
+                </div>
+
+                <div class="mb-5">
+                    <h2 class="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300 mb-3">Ringkasan per Blok</h2>
+                    <div id="blokSummaryGrid" class="grid grid-cols-2 gap-3"></div>
+                </div>
+
+                <div class="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-lg" style="max-height: 400px; overflow-y: auto;">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 dark:bg-slate-800 sticky top-0">
+                            <tr>
+                                <th class="p-2">Nama Warga</th>
+                                <th class="p-2 text-right">Total Transaksi</th>
+                                <th class="p-2 text-right">Total Rp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="daftarWargaBody"></tbody>
+                    </table>
+                </div>
+                <div id="daftarWargaEmpty" class="mt-4 text-center text-gray-500 dark:text-slate-400 hidden">
+                    Belum ada data warga yang tercatat.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-md mx-auto fixed bottom-3 left-0 right-0 px-4 z-50">
+        <div class="mx-auto max-w-md rounded-2xl border border-white/10 bg-indigo-950/95 px-3 py-2 shadow-[0_-10px_25px_rgba(15,23,42,0.24)] backdrop-blur-md">
+            <div class="grid grid-cols-3 gap-2 text-xs text-indigo-100">
+                <button id="navHomeButton" onclick="showHomeScreen()" class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl py-2 font-medium bg-white/10 text-white shadow-inner ring-1 ring-white/10">
+                    <span class="text-lg">⌂</span>
+                    <span>Beranda</span>
+                </button>
+                <button id="navHistoryButton" onclick="showHistoryScreen()" class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl py-2 font-medium text-indigo-200">
+                    <span class="text-lg">◔</span>
+                    <span>Riwayat</span>
+                </button>
+                <button id="navSettingButton" onclick="showSettingsScreen()" class="nav-item flex flex-col items-center justify-center gap-1 rounded-xl py-2 font-medium text-indigo-200">
+                    <span class="text-lg">⚙️</span>
+                    <span>Setting</span>
+                </button>
             </div>
         </div>
     </div>
