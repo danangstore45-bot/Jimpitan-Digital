@@ -9,6 +9,7 @@ let isSaving = false;
 const AUTHORIZED_SALDO_EDITORS = ['Luthi Tyan'];
 const VIBRATION_KEY = 'jimpitan_vibration_enabled';
 const THEME_KEY = 'jimpitan_theme';
+const TARGET_KAS_KEY = 'targetJimpitanBulan';
 
 function isVibrationEnabled() {
     const saved = localStorage.getItem(VIBRATION_KEY);
@@ -68,6 +69,16 @@ function toggleVibrationSetting() {
 
 function toggleSettingsPanel() {
     showSettingsScreen();
+}
+
+function toggleSettingPanel(panelId) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    const isHidden = panel.classList.contains('hidden');
+    document.querySelectorAll('[data-setting-panel]').forEach((item) => {
+        if (item !== panel) item.classList.add('hidden');
+    });
+    panel.classList.toggle('hidden', !isHidden);
 }
 
 function showSettingsScreen() {
@@ -194,12 +205,141 @@ function getSaldoSaatIni() {
     return Number.isFinite(value) ? value : 0;
 }
 
+function getTargetBulanSaatIni() {
+    const value = Number(localStorage.getItem(TARGET_KAS_KEY) || 2000000);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function getCurrentMonthLabel() {
+    return new Date().toLocaleString('id-ID', { month: 'long' });
+}
+
+function getTargetPercentage() {
+    const saldo = getSaldoSaatIni();
+    const target = getTargetBulanSaatIni();
+    if (!target) return 0;
+    return Math.min((saldo / target) * 100, 100);
+}
+
+function getWargaOptions() {
+    const storedWarga = JSON.parse(localStorage.getItem('wargaJimpitan') || '[]');
+    const storedRiwayat = JSON.parse(localStorage.getItem('jimpitan') || '[]');
+    const names = [];
+
+    const collect = (items) => {
+        if (!Array.isArray(items)) return;
+        items.forEach((item) => {
+            const nama = typeof item?.nama === 'string' ? item.nama.trim() : '';
+            if (nama && !names.includes(nama)) names.push(nama);
+        });
+    };
+
+    collect(storedWarga);
+    collect(storedRiwayat);
+    return names.sort((a, b) => a.localeCompare(b, 'id'));
+}
+
+function validateWargaName(name) {
+    const clean = String(name || '').trim();
+    if (!clean) return false;
+    return getWargaOptions().includes(clean);
+}
+
+function updateWargaOptions() {
+    const input = document.getElementById('wargaId');
+    const datalist = document.getElementById('wargaListOptions');
+    if (!input || !datalist) return;
+
+    const options = getWargaOptions();
+    datalist.innerHTML = options.map((nama) => `<option value="${nama}"></option>`).join('');
+    input.setAttribute('placeholder', options.length ? 'Pilih nama warga yang valid' : 'Belum ada data warga');
+}
+
+function updateTotalWargaDisplay() {
+    const el = document.getElementById('totalWargaText');
+    const total = getWargaOptions().length;
+    if (el) {
+        el.textContent = `Total data warga: ${total}`;
+    }
+}
+
 function updateSaldoDisplay() {
     const saldoEl = document.getElementById('saldoDisplay');
     const saldo = getSaldoSaatIni();
     if (saldoEl) {
         saldoEl.textContent = `Rp ${saldo.toLocaleString('id-ID')}`;
     }
+
+    const periodeEl = document.getElementById('periodeLabel');
+    if (periodeEl) {
+        const monthName = getCurrentMonthLabel();
+        periodeEl.textContent = `Periode ${monthName.charAt(0).toUpperCase() + monthName.slice(1)}`;
+    }
+
+    const targetTextEl = document.getElementById('targetText');
+    const targetProgressBar = document.getElementById('targetProgressBar');
+    const target = getTargetBulanSaatIni();
+    const percentage = getTargetPercentage();
+
+    if (targetTextEl) {
+        targetTextEl.textContent = `Target bulan ini: Rp ${target.toLocaleString('id-ID')} (${Math.round(percentage)}% tercapai)`;
+    }
+
+    if (targetProgressBar) {
+        targetProgressBar.style.width = `${percentage}%`;
+    }
+
+    updateTotalWargaDisplay();
+    updateWargaOptions();
+}
+
+function editTargetJimpitan() {
+    if (!petugasAktif || !AUTHORIZED_SALDO_EDITORS.includes(petugasAktif.trim())) {
+        Swal.fire({
+            title: 'Akses dibatasi',
+            text: 'Hanya petugas tertentu yang bisa mengubah target bulanan. Pilih petugas yang berwenang terlebih dahulu.',
+            icon: 'warning',
+            confirmButtonText: 'Pilih Petugas',
+            confirmButtonColor: '#4f46e5'
+        }).then(() => {
+            gantiPetugas();
+        });
+        return;
+    }
+
+    const currentTarget = getTargetBulanSaatIni();
+
+    Swal.fire({
+        title: 'Ubah Target Bulanan',
+        input: 'number',
+        inputLabel: 'Masukkan nominal target baru',
+        inputValue: currentTarget,
+        inputAttributes: {
+            min: 0,
+            step: 1000,
+        },
+        showCancelButton: true,
+        confirmButtonText: 'Simpan',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#4f46e5'
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+
+        const newTarget = Number(result.value || 0);
+        localStorage.setItem(TARGET_KAS_KEY, String(newTarget));
+        updateSaldoDisplay();
+
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: 'Target diperbarui',
+            text: `Rp ${newTarget.toLocaleString('id-ID')}`,
+            showConfirmButton: false,
+            timer: 2000,
+            timerProgressBar: true
+        });
+    });
 }
 
 function editSaldoJimpitan() {
@@ -285,6 +425,16 @@ function simpanData() {
 
     if (!blok) return alert("Pilih blok dulu!");
     if (!nama) return alert("Pilih warga dulu!");
+    if (!validateWargaName(nama)) {
+        Swal.fire({
+            title: 'Nama warga tidak valid',
+            text: 'Pilih nama yang sudah ada di data warga yang terdaftar.',
+            icon: 'warning',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#4f46e5'
+        });
+        return;
+    }
 
     let listJimpitan = JSON.parse(localStorage.getItem('jimpitan') || "[]");
     if (!Array.isArray(listJimpitan)) {
@@ -387,6 +537,86 @@ function simpanData() {
 const html5QrCode = new Html5Qrcode("reader");
 const config = { fps: 10, qrbox: { width: 250, height: 250 } };
 
+function normalizeNamaWarga(value) {
+    if (typeof value !== 'string') return '';
+    const cleaned = value.trim().replace(/\s+/g, ' ');
+    if (!cleaned) return '';
+    return cleaned.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function isNamaWargaValid(value) {
+    const cleaned = normalizeNamaWarga(value);
+    if (!cleaned) return false;
+    if (cleaned.length < 2 || cleaned.length > 60) return false;
+    return /^[A-Za-zÀ-ÿ0-9 .,'-]+$/.test(cleaned);
+}
+
+function tambahDataWarga() {
+    const currentList = localStorage.getItem('wargaJimpitan');
+    let parsed = [];
+    try {
+        parsed = currentList ? JSON.parse(currentList) : [];
+    } catch (err) {
+        parsed = [];
+    }
+    if (!Array.isArray(parsed)) parsed = [];
+
+    const existingNames = new Set(parsed.map(item => String(item?.nama || '').trim()).filter(Boolean).map(name => name.toLowerCase()));
+
+    Swal.fire({
+        title: 'Tambah Warga Baru',
+        html: `
+            <div class="text-left">
+                <p class="text-sm text-slate-600 mb-3">Masukkan nama warga baru yang akan ditambahkan ke data RT.</p>
+                <input id="inputNamaWargaBaru" type="text" placeholder="Contoh: Siti Rahma" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Simpan',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#4f46e5',
+        preConfirm: () => {
+            const selected = normalizeNamaWarga(document.getElementById('inputNamaWargaBaru')?.value || '');
+
+            if (!selected) {
+                Swal.showValidationMessage('Nama warga tidak boleh kosong.');
+                return false;
+            }
+
+            if (!isNamaWargaValid(selected)) {
+                Swal.showValidationMessage('Nama warga hanya boleh berisi huruf, angka, spasi, titik, koma, tanda petik, dan tanda hubung.');
+                return false;
+            }
+
+            if (existingNames.has(selected.toLowerCase())) {
+                Swal.showValidationMessage('Nama warga sudah ada di data, pilih nama lain.');
+                return false;
+            }
+
+            return selected;
+        }
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+
+        const namaBaru = result.value;
+        const nextData = [...parsed, { nama: namaBaru, total_nominal: 0, total_transaksi: 0, blok: '' }];
+        localStorage.setItem('wargaJimpitan', JSON.stringify(nextData));
+        updateSaldoDisplay();
+        renderDaftarWarga();
+
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: 'Data warga ditambahkan',
+            text: namaBaru,
+            showConfirmButton: false,
+            timer: 2200,
+            timerProgressBar: true
+        });
+    });
+}
+
 function updateSessionStatus() {
     const statusEl = document.getElementById('sessionStatus');
     const btnMulai = document.getElementById('btnMulai');
@@ -480,6 +710,12 @@ initSettingsUI();
 
 let showAllHistory = false;
 
+window.addEventListener('beforeunload', (event) => {
+    event.preventDefault();
+    event.returnValue = 'Apakah Anda yakin ingin keluar dari aplikasi?';
+    return event.returnValue;
+});
+
 function buildSessionDialog(title = 'Sesi Jimpitan', confirmText = 'Mulai Bertugas', defaultBlok = blokAktif || '', defaultPetugas = petugasAktif || '') {
     return Swal.fire({
         title: title,
@@ -529,6 +765,8 @@ function buildSessionDialog(title = 'Sesi Jimpitan', confirmText = 'Mulai Bertug
         `,
         confirmButtonText: confirmText,
         confirmButtonColor: '#4f46e5',
+        showCloseButton: true,
+        closeButtonHtml: '&times;',
         allowOutsideClick: false,
         allowEscapeKey: false,
         showClass: {
@@ -673,6 +911,8 @@ function renderDaftarWarga() {
 
     const daftarWargaBody = document.getElementById('daftarWargaBody');
     const daftarWargaEmpty = document.getElementById('daftarWargaEmpty');
+    updateTotalWargaDisplay();
+    updateWargaOptions();
 
     if (!daftarWargaBody || !daftarWargaEmpty) return;
 
