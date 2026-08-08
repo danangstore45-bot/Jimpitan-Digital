@@ -44,56 +44,106 @@
 </head>
 <body class="bg-gray-100 p-4 dark:bg-slate-950 dark:text-slate-200 transition-colors duration-200">
     <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6 dark:bg-slate-900 dark:shadow-slate-800">
-        <h1 class="text-2xl font-bold text-center mb-6 text-indigo-600 dark:text-indigo-300">Jimpitan Digital</h1>
-        
-        <!-- Scanner Section -->
-        <div class="mb-4 space-y-3">
-            <div class="flex gap-2">
-                <button id="btnMulai" onclick="mulaiPengambilan()" class="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700">Mulai Pengambilan</button>
-                <button id="btnAkhiri" onclick="akhiriPengambilan()" class="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:opacity-50" disabled>Akhiri Pengambilan</button>
+        <div id="homeScreen">
+            <h1 class="text-2xl font-bold text-center mb-4 text-indigo-600 dark:text-indigo-300">Jimpitan Digital</h1>
+            <p class="text-center text-sm text-gray-600 dark:text-slate-300 mb-6">Selamat datang! Pilih menu untuk melanjutkan.</p>
+            <div class="space-y-3">
+                <button onclick="showMainApp()" class="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700">Ambil Jimpitan</button>
+                <button onclick="showDaftarWarga()" class="w-full bg-slate-700 text-white py-3 rounded-lg hover:bg-slate-800">Daftar Warga</button>
             </div>
-            <div class="text-sm text-gray-600 dark:text-slate-300">Status: <span id="sessionStatus" class="font-semibold text-gray-700 dark:text-slate-100">Belum dimulai</span></div>
-            <div class="text-sm text-gray-600 dark:text-slate-300">Petugas: <span id="petugasName" class="font-semibold text-gray-700 dark:text-slate-100">Belum dipilih</span></div>
-            <div class="text-sm text-gray-600 dark:text-slate-300">Ringkasan sesi: <span id="sessionSummary" class="font-semibold text-gray-700 dark:text-slate-100">0 data, total Rp 0</span></div>
-            <div class="flex items-center justify-between mb-2">
-                <div id="scanStatus" class="text-sm text-gray-600 dark:text-slate-300">Klik &quot;Mulai Pengambilan&quot; untuk memulai scan.</div>
-                <button id="restartScanner" onclick="mulaiScanner()" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 hidden">Scan lagi</button>
-            </div>
-            <div id="reader" class="rounded-lg overflow-hidden"></div>
-        </div>
-        
-        <!-- Form Input -->
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-slate-900 dark:text-slate-200">Nama Warga / ID Rumah</label>
-                <input type="text" id="wargaId" class="w-full border border-gray-300 rounded p-2 bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" placeholder="Scan QR atau ketik manual" disabled>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-900 dark:text-slate-200">Jumlah (Rp)</label>
-                <input type="number" id="jumlah" value="1000" class="w-full border border-gray-300 rounded p-2 bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" disabled>
-            </div>
-            <button id="btnSimpan" onclick="simpanData()" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50" disabled>
-                Simpan Data
-            </button>
         </div>
 
-        <hr class="my-6">
+        <div id="mainApp" class="hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-2xl font-bold text-indigo-600 dark:text-indigo-300">Jimpitan Digital</h1>
+                <button onclick="showHomeScreen()" class="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-300">← Beranda</button>
+            </div>
 
-        <!-- History Table -->
-        <h2 class="font-bold mb-2 text-gray-700 dark:text-slate-200">Riwayat Hari Ini</h2>
-        <div class="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-lg" style="max-height: 300px; overflow-y: auto;">
-            <table class="w-full text-sm text-left">
-                <thead class="bg-gray-50 dark:bg-slate-800 sticky top-0">
-                    <tr>
-                        <th class="p-2">Warga</th>
-                        <th class="p-2">Petugas</th>
-                        <th class="p-2 text-right">Jumlah</th>
-                    </tr>
-                </thead>
-                <tbody id="historyBody"></tbody>
-            </table>
+            <!-- Scanner Section -->
+            <div class="mb-4 space-y-3">
+                <div class="flex gap-2">
+                    <button id="btnMulai" onclick="mulaiPengambilan()" class="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700">Mulai Pengambilan</button>
+                    <button id="btnAkhiri" onclick="akhiriPengambilan()" class="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:opacity-50" disabled>Akhiri Pengambilan</button>
+                </div>
+                <div class="text-sm text-gray-600 dark:text-slate-300">Status: <span id="sessionStatus" class="font-semibold text-gray-700 dark:text-slate-100">Belum dimulai</span></div>
+                <div class="text-sm text-gray-600 dark:text-slate-300">Petugas: <span id="petugasName" class="font-semibold text-gray-700 dark:text-slate-100">Belum dipilih</span></div>
+                <div class="text-sm text-gray-600 dark:text-slate-300">Ringkasan sesi: <span id="sessionSummary" class="font-semibold text-gray-700 dark:text-slate-100">0 data, total Rp 0</span></div>
+                <div class="flex items-center justify-between mb-2">
+                    <div id="scanStatus" class="text-sm text-gray-600 dark:text-slate-300">Klik &quot;Mulai Pengambilan&quot; untuk memulai scan.</div>
+                    <button id="restartScanner" onclick="mulaiScanner()" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 hidden">Scan lagi</button>
+                </div>
+                <div id="reader" class="rounded-lg overflow-hidden"></div>
+            </div>
+            
+            <!-- Form Input -->
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-900 dark:text-slate-200">Blok</label>
+                    <select id="blok" class="w-full border border-gray-300 rounded p-2 bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" disabled>
+                        <option value="">Pilih Blok</option>
+                        <option value="1">Blok 1</option>
+                        <option value="2">Blok 2</option>
+                        <option value="3">Blok 3</option>
+                        <option value="4">Blok 4</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-900 dark:text-slate-200">Nama Warga / ID Rumah</label>
+                    <input type="text" id="wargaId" class="w-full border border-gray-300 rounded p-2 bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" placeholder="Scan QR atau ketik manual" disabled>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-900 dark:text-slate-200">Jumlah (Rp)</label>
+                    <input type="number" id="jumlah" value="1000" class="w-full border border-gray-300 rounded p-2 bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" disabled>
+                </div>
+                <button id="btnSimpan" onclick="simpanData()" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50" disabled>
+                    Simpan Data
+                </button>
+            </div>
+
+            <hr class="my-6">
+
+            <!-- History Table -->
+            <h2 class="font-bold mb-2 text-gray-700 dark:text-slate-200">Riwayat Hari Ini</h2>
+            <div class="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-lg" style="max-height: 300px; overflow-y: auto;">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-gray-50 dark:bg-slate-800 sticky top-0">
+                        <tr>
+                            <th class="p-2">Warga</th>
+                            <th class="p-2">Blok</th>
+                            <th class="p-2">Petugas</th>
+                            <th class="p-2 text-right">Jumlah</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody"></tbody>
+                </table>
+            </div>
+            <button id="btnTampilkanSemua" onclick="toggleShowAll()" class="mt-2 text-indigo-600 hover:text-indigo-800 text-sm font-semibold hidden">Tampilkan Semua</button>
         </div>
-        <button id="btnTampilkanSemua" onclick="toggleShowAll()" class="mt-2 text-indigo-600 hover:text-indigo-800 text-sm font-semibold hidden">Tampilkan Semua</button>
+
+        <div id="daftarWargaSection" class="hidden">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-indigo-600 dark:text-indigo-300">Daftar Warga</h1>
+                    <p class="text-sm text-gray-600 dark:text-slate-300">Lihat warga yang pernah tercatat jimpitan.</p>
+                </div>
+                <button onclick="showHomeScreen()" class="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-300">← Beranda</button>
+            </div>
+            <div class="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-lg" style="max-height: 400px; overflow-y: auto;">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-gray-50 dark:bg-slate-800 sticky top-0">
+                        <tr>
+                            <th class="p-2">Nama Warga</th>
+                            <th class="p-2 text-right">Total Transaksi</th>
+                            <th class="p-2 text-right">Total Rp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="daftarWargaBody"></tbody>
+                </table>
+            </div>
+            <div id="daftarWargaEmpty" class="mt-4 text-center text-gray-500 dark:text-slate-400 hidden">
+                Belum ada data warga yang tercatat.
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>

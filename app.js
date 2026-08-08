@@ -1,4 +1,4 @@
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwZJzFXiu4QEwq3EnTs-XE54RrBoVC_KKFNAj-dBqRk12hl69jnbSi495kKiyzkew18/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw1Pnp_voeFoRJv5nFYnI6Hknmd8RFeT6PAuawqY_hqFfLpNTtPVjSXJu-nU5B3c6BZ/exec";
 let pengambilanAktif = false;
 let scannerBerjalan = false;
 let jumlahSesi = 0;
@@ -17,6 +17,7 @@ function setPetugas(name) {
 
 function updateInputsState() {
     const disabled = !pengambilanAktif || isSaving;
+    document.getElementById('blok').disabled = disabled;
     document.getElementById('wargaId').disabled = disabled;
     document.getElementById('jumlah').disabled = disabled;
     document.getElementById('btnSimpan').disabled = disabled;
@@ -25,18 +26,28 @@ function updateInputsState() {
 function simpanData() {
     if (!pengambilanAktif) return alert("Mulai pengambilan dulu sebelum simpan data.");
     if (!petugasAktif) return alert("Pilih petugas terlebih dahulu.");
+    const blok = document.getElementById('blok').value;
     const nama = document.getElementById('wargaId').value.trim();
     const nominal = document.getElementById('jumlah').value;
     const tanggal = new Date().toLocaleDateString('id-ID');
 
+    if (!blok) return alert("Pilih blok dulu!");
     if (!nama) return alert("Pilih warga dulu!");
 
     let listJimpitan = JSON.parse(localStorage.getItem('jimpitan') || "[]");
-    const sudahTerinput = listJimpitan.some(item => item.nama.trim().toLowerCase() === nama.toLowerCase() && item.tanggal === tanggal);
+    if (!Array.isArray(listJimpitan)) {
+        listJimpitan = [];
+    }
+    const sudahTerinput = listJimpitan.some(item =>
+        typeof item?.nama === 'string' &&
+        item.nama.trim().toLowerCase() === nama.toLowerCase() &&
+        String(item?.blok || '') === String(blok) &&
+        item.tanggal === tanggal
+    );
     if (sudahTerinput) {
         return Swal.fire({
             title: 'Duplikat Terdeteksi',
-            text: 'Rumah/QR ini sudah dicatat hari ini. Silakan cek kembali daftar riwayat.',
+            text: 'Rumah/QR ini sudah dicatat di blok yang sama hari ini. Silakan cek kembali daftar riwayat.',
             icon: 'warning',
             confirmButtonText: 'Oke',
             confirmButtonColor: '#4f46e5'
@@ -49,7 +60,8 @@ function simpanData() {
         nominal: nominal,
         petugas: petugasAktif,
         waktu: new Date().toLocaleTimeString('id-ID'),
-        tanggal: tanggal
+        tanggal: tanggal,
+        blok: blok
     };
 
     const darkMode = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -101,6 +113,7 @@ function simpanData() {
         }
         
         updateTable();
+        document.getElementById('blok').value = "";
         document.getElementById('wargaId').value = "";
     })
     .catch(error => {
@@ -287,19 +300,30 @@ function toggleShowAll() {
 
 // Update Tampilan Tabel di HP
 function updateTable() {
-    const listJimpitan = JSON.parse(localStorage.getItem('jimpitan') || "[]");
+    let listJimpitan = JSON.parse(localStorage.getItem('jimpitan') || "[]");
+    if (!Array.isArray(listJimpitan)) {
+        listJimpitan = [];
+    }
     const tbody = document.getElementById('historyBody');
     const btnTampilkan = document.getElementById('btnTampilkanSemua');
     
     if(tbody) {
         const dataToShow = showAllHistory ? listJimpitan : listJimpitan.slice(0, 3);
-        tbody.innerHTML = dataToShow.map(item => `
+        tbody.innerHTML = dataToShow.map(item => {
+            const nama = typeof item?.nama === 'string' ? item.nama : '—';
+            const waktu = typeof item?.waktu === 'string' ? item.waktu : '';
+            const tanggalText = item?.tanggal ? ' • ' + item.tanggal : '';
+            const nominalValue = parseInt(item?.nominal) || 0;
+            const blok = item?.blok ? `Blok ${item.blok}` : '—';
+            return `
             <tr class="border-b">
-                <td class="p-2">${item.nama} <br><span class="text-xs text-gray-400">${item.waktu}${item.tanggal ? ' • ' + item.tanggal : ''}</span></td>
-                <td class="p-2">${item.petugas || '—'}</td>
-                <td class="p-2 text-right text-green-600 font-bold">Rp ${parseInt(item.nominal).toLocaleString()}</td>
+                <td class="p-2">${nama} <br><span class="text-xs text-gray-400">${waktu}${tanggalText}</span></td>
+                <td class="p-2">${blok}</td>
+                <td class="p-2">${item?.petugas || '—'}</td>
+                <td class="p-2 text-right text-green-600 font-bold">Rp ${nominalValue.toLocaleString()}</td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
         
         // Tampilkan tombol "Tampilkan Semua" hanya jika ada lebih dari 3 item
         if (listJimpitan.length > 3) {
@@ -310,7 +334,62 @@ function updateTable() {
         }
     }
 }
+function renderDaftarWarga() {
+    let listJimpitan = JSON.parse(localStorage.getItem('jimpitan') || '[]');
+    if (!Array.isArray(listJimpitan)) {
+        listJimpitan = [];
+    }
+    const daftarWargaBody = document.getElementById('daftarWargaBody');
+    const daftarWargaEmpty = document.getElementById('daftarWargaEmpty');
+
+    if (!daftarWargaBody || !daftarWargaEmpty) return;
+
+    const wargaMap = listJimpitan.reduce((acc, item) => {
+        if (typeof item?.nama !== 'string') return acc;
+        const key = item.nama.trim();
+        if (!key) return acc;
+        if (!acc[key]) acc[key] = { nama: key, count: 0, total: 0 };
+        acc[key].count += 1;
+        acc[key].total += parseInt(item.nominal) || 0;
+        return acc;
+    }, {});
+
+    const wargaList = Object.values(wargaMap).sort((a, b) => b.total - a.total);
+    daftarWargaBody.innerHTML = wargaList.map(item => `
+        <tr class="border-b">
+            <td class="p-2">${item.nama}</td>
+            <td class="p-2 text-right">${item.count}</td>
+            <td class="p-2 text-right text-green-600 font-bold">Rp ${item.total.toLocaleString()}</td>
+        </tr>
+    `).join('');
+
+    if (wargaList.length === 0) {
+        daftarWargaEmpty.classList.remove('hidden');
+    } else {
+        daftarWargaEmpty.classList.add('hidden');
+    }
+}
+
+function showHomeScreen() {
+    document.getElementById('homeScreen').classList.remove('hidden');
+    document.getElementById('mainApp').classList.add('hidden');
+    document.getElementById('daftarWargaSection').classList.add('hidden');
+}
+
+function showMainApp() {
+    document.getElementById('homeScreen').classList.add('hidden');
+    document.getElementById('mainApp').classList.remove('hidden');
+    document.getElementById('daftarWargaSection').classList.add('hidden');
+}
+
+function showDaftarWarga() {
+    document.getElementById('homeScreen').classList.add('hidden');
+    document.getElementById('mainApp').classList.add('hidden');
+    document.getElementById('daftarWargaSection').classList.remove('hidden');
+    renderDaftarWarga();
+}
+
 updateTable();
 
-// Tampilkan popup Jimpitan Jigital saat halaman pertama kali dibuka
-showWelcomeDialog();
+// Mulai dari beranda utama
+showHomeScreen();
