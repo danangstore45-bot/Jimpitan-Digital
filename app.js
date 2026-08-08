@@ -1,10 +1,69 @@
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw1Pnp_voeFoRJv5nFYnI6Hknmd8RFeT6PAuawqY_hqFfLpNTtPVjSXJu-nU5B3c6BZ/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby3nIX9yUJ1mOsgLiRNPNYHEywkJkvWSKHexm3e35lsZ812Vfbj_RwEJpGY1upv7ho0/exec";
 let pengambilanAktif = false;
 let scannerBerjalan = false;
-let jumlahSesi = 0;
+let jumlahSesi = 0;                       
 let totalSesi = 0;
 let petugasAktif = "";
+let blokAktif = "";
 let isSaving = false;
+const AUTHORIZED_SALDO_EDITORS = ['Luthi Tyan'];
+
+async function fetchJson(url, options = {}) { 
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        throw new Error('Network error');
+    }
+    return response.json();
+}
+
+async function syncSaldoFromServer() {
+    try {
+        const result = await fetchJson(`${SCRIPT_URL}?action=saldo`);
+        if (result && result.ok && typeof result.saldo !== 'undefined') {
+            localStorage.setItem('saldoJimpitan', String(result.saldo));
+            updateSaldoDisplay();
+        }
+    } catch (err) {
+        console.warn('Gagal mengambil saldo dari server:', err);
+    }
+}
+
+async function syncRiwayatFromServer() {
+    try {
+        const result = await fetchJson(`${SCRIPT_URL}?action=riwayat`);
+        if (result && result.ok && Array.isArray(result.data)) {
+            localStorage.setItem('jimpitan', JSON.stringify(result.data));
+            updateTable();
+            renderDaftarWarga();
+        }
+    } catch (err) {
+        console.warn('Gagal mengambil riwayat dari server:', err);
+    }
+}
+
+async function syncWargaFromServer() {
+    try {
+        const result = await fetchJson(`${SCRIPT_URL}?action=warga`);
+        if (result && result.ok && Array.isArray(result.data)) {
+            localStorage.setItem('wargaJimpitan', JSON.stringify(result.data));
+            renderDaftarWarga();
+        }
+    } catch (err) {
+        console.warn('Gagal mengambil data kelompok/warga dari server:', err);
+    }
+}
+
+async function syncBlokFromServer() {
+    try {
+        const result = await fetchJson(`${SCRIPT_URL}?action=blok`);
+        if (result && result.ok && Array.isArray(result.data)) {
+            localStorage.setItem('blokJimpitan', JSON.stringify(result.data));
+            renderBlokSummary();
+        }
+    } catch (err) {
+        console.warn('Gagal mengambil summary blok dari server:', err);
+    }
+}
 
 function setPetugas(name) {
     petugasAktif = name;
@@ -15,18 +74,117 @@ function setPetugas(name) {
     }
 }
 
+function setBlok(blok) {
+    blokAktif = blok;
+    const blokNameEl = document.getElementById('blokName');
+    if (blokNameEl) {
+        blokNameEl.textContent = blok ? `Blok ${blok}` : 'Belum dipilih';
+    }
+    const blokEl = document.getElementById('blok');
+    if (blokEl) {
+        blokEl.value = blok || "";
+    }
+}
+
 function updateInputsState() {
     const disabled = !pengambilanAktif || isSaving;
-    document.getElementById('blok').disabled = disabled;
+    const blokEl = document.getElementById('blok');
+    if (blokEl) blokEl.disabled = true;
     document.getElementById('wargaId').disabled = disabled;
     document.getElementById('jumlah').disabled = disabled;
     document.getElementById('btnSimpan').disabled = disabled;
 }
 
+function getSaldoSaatIni() {
+    const value = Number(localStorage.getItem('saldoJimpitan') || 1420000);
+    return Number.isFinite(value) ? value : 0;
+}
+
+function updateSaldoDisplay() {
+    const saldoEl = document.getElementById('saldoDisplay');
+    const saldo = getSaldoSaatIni();
+    if (saldoEl) {
+        saldoEl.textContent = `Rp ${saldo.toLocaleString('id-ID')}`;
+    }
+}
+
+function editSaldoJimpitan() {
+    if (!petugasAktif || !AUTHORIZED_SALDO_EDITORS.includes(petugasAktif.trim())) {
+        Swal.fire({
+            title: 'Akses dibatasi',
+            text: 'Hanya petugas tertentu yang bisa mengubah saldo. Pilih petugas yang berwenang terlebih dahulu.',
+            icon: 'warning',
+            confirmButtonText: 'Pilih Petugas',
+            confirmButtonColor: '#4f46e5'
+        }).then(() => {
+            gantiPetugas();
+        });
+        return;
+    }
+
+    const currentSaldo = getSaldoSaatIni();
+
+    Swal.fire({
+        title: 'Ubah Saldo Jimpitan',
+        input: 'number',
+        inputLabel: 'Masukkan nominal saldo baru',
+        inputValue: currentSaldo,
+        inputAttributes: {
+            min: 0,
+            step: 1000,
+        },
+        showCancelButton: true,
+        confirmButtonText: 'Simpan',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#4f46e5'
+    }).then(async (result) => {
+        if (!result.isConfirmed) return;
+
+        const newSaldo = Number(result.value || 0);
+
+        try {
+            const apiResult = await fetchJson(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'set_saldo',
+                    saldo: newSaldo,
+                    petugas: petugasAktif
+                })
+            });
+
+            if (!apiResult || !apiResult.ok) {
+                throw new Error(apiResult && apiResult.error ? apiResult.error : 'Gagal update saldo');
+            }
+
+            localStorage.setItem('saldoJimpitan', String(newSaldo));
+            updateSaldoDisplay();
+
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'Saldo diperbarui',
+                text: `Rp ${newSaldo.toLocaleString('id-ID')}`,
+                showConfirmButton: false,
+                timer: 2000,
+                timerProgressBar: true
+            });
+        } catch (error) {
+            Swal.fire({
+                title: 'Gagal update saldo',
+                text: error.message,
+                icon: 'error',
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#4f46e5'
+            });
+        }
+    });
+}
+
 function simpanData() {
     if (!pengambilanAktif) return alert("Mulai pengambilan dulu sebelum simpan data.");
     if (!petugasAktif) return alert("Pilih petugas terlebih dahulu.");
-    const blok = document.getElementById('blok').value;
+    const blok = blokAktif || document.getElementById('blok').value;
     const nama = document.getElementById('wargaId').value.trim();
     const nominal = document.getElementById('jumlah').value;
     const tanggal = new Date().toLocaleDateString('id-ID');
@@ -76,9 +234,13 @@ function simpanData() {
     // 1. Simpan ke Google Sheets via API
     fetch(SCRIPT_URL, {
         method: 'POST',
-        body: JSON.stringify(dataKirim)
+        body: JSON.stringify({ ...dataKirim, action: 'save_jimpitan' })
     })
-    .then(res => {
+    .then(async (res) => {
+        const json = await res.json();
+        if (!json || !json.ok) {
+            throw new Error(json && json.error ? json.error : 'Gagal menyimpan data');
+        }
         Swal.fire({
           title: `<span style="color: #4f46e5; font-family: Poppins, sans-serif;">Jimpitan Digital</span>`,
           html: `
@@ -105,6 +267,10 @@ function simpanData() {
         // 2. Simpan juga ke memori lokal browser sebagai cadangan
         listJimpitan.unshift(dataKirim);
         localStorage.setItem('jimpitan', JSON.stringify(listJimpitan));
+        if (json && typeof json.saldo !== 'undefined') {
+            localStorage.setItem('saldoJimpitan', String(json.saldo));
+            updateSaldoDisplay();
+        }
 
         if (pengambilanAktif) {
             jumlahSesi += 1;
@@ -112,8 +278,7 @@ function simpanData() {
             updateSessionSummary();
         }
         
-        updateTable();
-        document.getElementById('blok').value = "";
+        await syncRiwayatFromServer();
         document.getElementById('wargaId').value = "";
     })
     .catch(error => {
@@ -153,7 +318,7 @@ function updateSessionSummary() {
 
 function mulaiPengambilan() {
     if (pengambilanAktif) return;
-    if (!petugasAktif) {
+    if (!petugasAktif || !blokAktif) {
         return showWelcomeDialog();
     }
     pengambilanAktif = true;
@@ -207,43 +372,62 @@ function mulaiScanner() {
 // Perbarui status awal tanpa otomatis mulai kamera
 updateSessionStatus();
 updateSessionSummary();
+updateSaldoDisplay();
+syncSaldoFromServer();
+syncRiwayatFromServer();
+syncWargaFromServer();
+syncBlokFromServer();
 
 let showAllHistory = false;
 
-function showWelcomeDialog() {
-    Swal.fire({
-        title: 'Selamat Datang!',
+function buildSessionDialog(title = 'Sesi Jimpitan', confirmText = 'Mulai Bertugas', defaultBlok = blokAktif || '', defaultPetugas = petugasAktif || '') {
+    return Swal.fire({
+        title: title,
         html: `
             <div class="text-center">
                 <div class="text-6xl mb-4">💰</div>
                 <h2 class="text-xl font-bold text-indigo-600 mb-2">Jimpitan Digital</h2>
-                <p class="text-gray-600 mb-4 text-sm">Silakan pilih nama petugas untuk memulai sesi pengambilan jimpitan hari ini.</p>
-                
-                <div class="relative mt-4">
-                    <input type="text" id="searchPetugas" placeholder="Cari nama petugas..." class="block w-full px-4 py-2 mb-2 text-gray-700 bg-gray-50 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
-                    <select id="pilihPetugas" class="block w-full px-4 py-3 text-gray-700 bg-gray-50 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
-                        <option value="" disabled selected>-- Pilih Nama Petugas --</option>
-                        <option value="Luthi Tyan">Luthi Tyan</option>
-                        <option value="Aa Badrul Munir">Aa Badrul Munir</option>
-                        <option value="Muhammad Maftuh Zen">Muhammad Maftuh Zen</option>
-                        <option value="Dede yusna">Dede yusna</option>
-                        <option value="M Aziz setiawan">M Aziz setiawan</option>
-                        <option value="Asep nurdiansyah">Asep nurdiansyah</option>
-                        <option value="Agun Gunawan">Agun Gunawan</option>
-                        <option value="Alfian Putra H">Alfian Putra H</option>
-                        <option value="Ronal Dwi Nugroho">Ronal Dwi Nugroho</option>
-                        <option value="Hoeririn">Hoeririn</option>
-                        <option value="M alfi fahrul N">M alfi fahrul N</option>
-                        <option value="M irfan">M irfan</option>
-                        <option value="Adik Gunawan">Adik Gunawan</option>
-                        <option value="Danang">Danang</option>
-                        <option value="Riki">Riki</option>
-                        <option value="Jalal">Jalal</option>
-                    </select>
+                <p class="text-gray-600 mb-4 text-sm">Pilih blok dan petugas dalam satu popup.</p>
+
+                <div class="space-y-3 mt-4 text-left">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Blok</label>
+                        <select id="pilihBlok" class="block w-full px-4 py-3 text-gray-700 bg-gray-50 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                            <option value="" disabled ${defaultBlok ? '' : 'selected'}>-- Pilih Blok --</option>
+                            <option value="1" ${defaultBlok === '1' ? 'selected' : ''}>Blok 1</option>
+                            <option value="2" ${defaultBlok === '2' ? 'selected' : ''}>Blok 2</option>
+                            <option value="3" ${defaultBlok === '3' ? 'selected' : ''}>Blok 3</option>
+                            <option value="4" ${defaultBlok === '4' ? 'selected' : ''}>Blok 4</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Petugas</label>
+                        <input type="text" id="searchPetugas" placeholder="Cari nama petugas..." class="block w-full px-4 py-2 mb-2 text-gray-700 bg-gray-50 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                        <select id="pilihPetugas" class="block w-full px-4 py-3 text-gray-700 bg-gray-50 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                            <option value="" disabled ${defaultPetugas ? '' : 'selected'}>-- Pilih Nama Petugas --</option>
+                            <option value="Luthi Tyan" ${defaultPetugas === 'Luthi Tyan' ? 'selected' : ''}>Luthi Tyan</option>
+                            <option value="Aa Badrul Munir" ${defaultPetugas === 'Aa Badrul Munir' ? 'selected' : ''}>Aa Badrul Munir</option>
+                            <option value="Muhammad Maftuh Zen" ${defaultPetugas === 'Muhammad Maftuh Zen' ? 'selected' : ''}>Muhammad Maftuh Zen</option>
+                            <option value="Dede yusna" ${defaultPetugas === 'Dede yusna' ? 'selected' : ''}>Dede yusna</option>
+                            <option value="M Aziz setiawan" ${defaultPetugas === 'M Aziz setiawan' ? 'selected' : ''}>M Aziz setiawan</option>
+                            <option value="Asep nurdiansyah" ${defaultPetugas === 'Asep nurdiansyah' ? 'selected' : ''}>Asep nurdiansyah</option>
+                            <option value="Agun Gunawan" ${defaultPetugas === 'Agun Gunawan' ? 'selected' : ''}>Agun Gunawan</option>
+                            <option value="Alfian Putra H" ${defaultPetugas === 'Alfian Putra H' ? 'selected' : ''}>Alfian Putra H</option>
+                            <option value="Ronal Dwi Nugroho" ${defaultPetugas === 'Ronal Dwi Nugroho' ? 'selected' : ''}>Ronal Dwi Nugroho</option>
+                            <option value="Hoeririn" ${defaultPetugas === 'Hoeririn' ? 'selected' : ''}>Hoeririn</option>
+                            <option value="M alfi fahrul N" ${defaultPetugas === 'M alfi fahrul N' ? 'selected' : ''}>M alfi fahrul N</option>
+                            <option value="M irfan" ${defaultPetugas === 'M irfan' ? 'selected' : ''}>M irfan</option>
+                            <option value="Adik Gunawan" ${defaultPetugas === 'Adik Gunawan' ? 'selected' : ''}>Adik Gunawan</option>
+                            <option value="Danang" ${defaultPetugas === 'Danang' ? 'selected' : ''}>Danang</option>
+                            <option value="Riki" ${defaultPetugas === 'Riki' ? 'selected' : ''}>Riki</option>
+                            <option value="Jalal" ${defaultPetugas === 'Jalal' ? 'selected' : ''}>Jalal</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         `,
-        confirmButtonText: 'Mulai Bertugas',
+        confirmButtonText: confirmText,
         confirmButtonColor: '#4f46e5',
         allowOutsideClick: false,
         allowEscapeKey: false,
@@ -257,40 +441,76 @@ function showWelcomeDialog() {
             const searchInput = document.getElementById('searchPetugas');
             const select = document.getElementById('pilihPetugas');
             const options = select.querySelectorAll('option');
-            
+
             searchInput.addEventListener('input', function() {
                 const filter = this.value.toLowerCase();
                 options.forEach(option => {
-                    if (option.value === '') return; // Skip placeholder
+                    if (option.value === '') return;
                     const text = option.textContent.toLowerCase();
                     option.style.display = text.includes(filter) ? '' : 'none';
                 });
             });
         },
         preConfirm: () => {
+            const blok = document.getElementById('pilihBlok').value;
             const nama = document.getElementById('pilihPetugas').value;
+
+            if (!blok) {
+                Swal.showValidationMessage('Anda harus memilih blok!');
+            }
             if (!nama) {
                 Swal.showValidationMessage('Anda harus memilih nama petugas!');
             }
-            return nama;
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            // Simpan nama ke variabel global agar bisa dikirim ke Sheets
-            setPetugas(result.value); // Update petugasAktif dan tampilan
-            
-            // Notifikasi sukses kecil (Toast)
-            Swal.fire({
-                toast: true,
-                position: 'top-end',
-                icon: 'success',
-                title: 'Halo ' + result.value + ', selamat bertugas!',
-                showConfirmButton: false,
-                timer: 3000,
-                timerProgressBar: true
-            });
+
+            if (!blok || !nama) {
+                return false;
+            }
+
+            return { blok, petugas: nama };
         }
     });
+}
+
+function showWelcomeDialog() {
+    buildSessionDialog('Sesi Jimpitan', 'Mulai Bertugas')
+        .then((result) => {
+            if (result.isConfirmed) {
+                setBlok(result.value.blok);
+                setPetugas(result.value.petugas);
+
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'success',
+                    title: 'Blok ' + result.value.blok + ' • ' + result.value.petugas,
+                    text: 'Sesi siap dimulai.',
+                    showConfirmButton: false,
+                    timer: 2500,
+                    timerProgressBar: true
+                });
+            }
+        });
+}
+
+function gantiPetugas() {
+    buildSessionDialog('Ganti Petugas & Blok', 'Simpan Perubahan', blokAktif || '', petugasAktif || '')
+        .then((result) => {
+            if (result.isConfirmed) {
+                setBlok(result.value.blok);
+                setPetugas(result.value.petugas);
+
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'success',
+                    title: 'Data sesi diperbarui',
+                    text: 'Blok ' + result.value.blok + ' • ' + result.value.petugas,
+                    showConfirmButton: false,
+                    timer: 2200,
+                    timerProgressBar: true
+                });
+            }
+        });
 }
 
 function toggleShowAll() {
@@ -335,10 +555,22 @@ function updateTable() {
     }
 }
 function renderDaftarWarga() {
-    let listJimpitan = JSON.parse(localStorage.getItem('jimpitan') || '[]');
+    const storedWarga = JSON.parse(localStorage.getItem('wargaJimpitan') || '[]');
+    const storedRiwayat = JSON.parse(localStorage.getItem('jimpitan') || '[]');
+
+    let listJimpitan = Array.isArray(storedWarga) && storedWarga.length > 0
+        ? storedWarga.map(item => ({
+            nama: item?.nama || '',
+            nominal: item?.total_nominal || item?.nominal || 0,
+            blok: item?.blok || '',
+            count: item?.total_transaksi || 1
+        }))
+        : (Array.isArray(storedRiwayat) ? storedRiwayat : []);
+
     if (!Array.isArray(listJimpitan)) {
         listJimpitan = [];
     }
+
     const daftarWargaBody = document.getElementById('daftarWargaBody');
     const daftarWargaEmpty = document.getElementById('daftarWargaEmpty');
 
@@ -349,8 +581,8 @@ function renderDaftarWarga() {
         const key = item.nama.trim();
         if (!key) return acc;
         if (!acc[key]) acc[key] = { nama: key, count: 0, total: 0 };
-        acc[key].count += 1;
-        acc[key].total += parseInt(item.nominal) || 0;
+        acc[key].count += Number(item.count || item.total_transaksi || 1);
+        acc[key].total += parseInt(item.nominal || item.total_nominal || 0) || 0;
         return acc;
     }, {});
 
@@ -368,6 +600,38 @@ function renderDaftarWarga() {
     } else {
         daftarWargaEmpty.classList.add('hidden');
     }
+}
+
+function renderBlokSummary() {
+    const blokGrid = document.getElementById('blokSummaryGrid');
+    if (!blokGrid) return;
+
+    const blokData = JSON.parse(localStorage.getItem('blokJimpitan') || '[]');
+    const data = Array.isArray(blokData) && blokData.length ? blokData : [
+        { blok: '1', total_transaksi: 0, total_nominal: 0 },
+        { blok: '2', total_transaksi: 0, total_nominal: 0 },
+        { blok: '3', total_transaksi: 0, total_nominal: 0 },
+        { blok: '4', total_transaksi: 0, total_nominal: 0 }
+    ];
+
+    const map = Object.fromEntries(data.map(item => [String(item.blok || '0'), item]));
+    const values = [1, 2, 3, 4].map((blok) => {
+        const item = map[String(blok)] || { blok: String(blok), total_transaksi: 0, total_nominal: 0 };
+        return {
+            blok: String(blok),
+            total_transaksi: Number(item.total_transaksi || 0),
+            total_nominal: Number(item.total_nominal || 0)
+        };
+    });
+
+    blokGrid.innerHTML = values.map((item) => `
+        <div class="rounded-2xl bg-indigo-50 border border-indigo-100 p-3 shadow-sm dark:bg-slate-800 dark:border-slate-700">
+            <div class="text-xs uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Blok ${item.blok}</div>
+            <div class="mt-2 text-xl font-bold text-slate-900 dark:text-slate-100">${item.total_transaksi}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-300">Transaksi</div>
+            <div class="mt-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">Rp ${Number(item.total_nominal || 0).toLocaleString('id-ID')}</div>
+        </div>
+    `).join('');
 }
 
 function showHomeScreen() {
